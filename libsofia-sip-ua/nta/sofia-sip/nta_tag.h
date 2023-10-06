@@ -161,6 +161,12 @@ NTA_DLL extern tag_typedef_t ntatag_max_proceeding;
 NTA_DLL extern tag_typedef_t ntatag_max_proceeding_ref;
 #define NTATAG_MAX_PROCEEDING_REF(x) ntatag_max_proceeding_ref, tag_usize_vr(&(x))
 
+NTA_DLL extern tag_typedef_t ntatag_max_recv_requests_per_second;
+#define NTATAG_MAX_RECV_REQUESTS_PER_SECOND(x) ntatag_max_recv_requests_per_second, tag_usize_v((x))
+
+NTA_DLL extern tag_typedef_t ntatag_max_recv_requests_per_second_ref;
+#define NTATAG_MAX_RECV_REQUESTS_PER_SECOND_REF(x) ntatag_max_recv_requests_per_second_ref, tag_usize_vr(&(x))
+
 NTA_DLL extern tag_typedef_t ntatag_max_forwards;
 #define NTATAG_MAX_FORWARDS(x) ntatag_max_forwards, tag_uint_v((x))
 
@@ -374,6 +380,12 @@ NTA_DLL extern tag_typedef_t ntatag_tls_rport;
 
 NTA_DLL extern tag_typedef_t ntatag_tls_rport_ref;
 #define NTATAG_TLS_RPORT_REF(x) ntatag_tls_rport_ref, tag_bool_vr(&(x))
+
+NTA_DLL extern tag_typedef_t ntatag_tls_orq_connect_timeout;
+#define NTATAG_TLS_ORQ_CONNECT_TIMEOUT(x) ntatag_tls_orq_connect_timeout, tag_uint_v((x))
+
+NTA_DLL extern tag_typedef_t ntatag_tls_orq_connect_timeout_ref;
+#define NTATAG_TLS_ORQ_CONNECT_TIMEOUT_REF(x) ntatag_tls_orq_connect_timeout_ref, tag_uint_vr(&(x))
 
 NTA_DLL extern tag_typedef_t ntatag_preload;
 #define NTATAG_PRELOAD(x) ntatag_preload, tag_uint_v((x))
@@ -599,6 +611,93 @@ NTA_DLL extern tag_typedef_t ntatag_s_tout_response;
 
 NTA_DLL extern tag_typedef_t ntatag_s_tout_response_ref;
 #define NTATAG_S_TOUT_RESPONSE_REF(x) ntatag_s_tout_response_ref, tag_usize_vr(&(x))
+
+/* ====================================================================== */
+/* Tags for queue status. */
+
+NTA_DLL extern tag_typedef_t ntatag_q_in_completed;
+#define NTATAG_Q_IN_COMPLETED(x) ntatag_q_in_completed, tag_size_v(x)
+
+NTA_DLL extern tag_typedef_t ntatag_q_in_completed_ref;
+#define NTATAG_Q_IN_COMPLETED_REF(x) ntatag_q_in_completed_ref, tag_size_vr(&(x))
+
+NTA_DLL extern tag_typedef_t ntatag_q_in_final_failed;
+#define NTATAG_Q_IN_FINAL_FAILED(x) ntatag_q_in_final_failed, tag_size_v(x)
+
+NTA_DLL extern tag_typedef_t ntatag_q_in_final_failed_ref;
+#define NTATAG_Q_IN_FINAL_FAILED_REF(x) ntatag_q_in_final_failed_ref, tag_size_vr(&(x))
+
+NTA_DLL extern tag_typedef_t ntatag_q_in_inv_completed;
+#define NTATAG_Q_IN_INV_COMPLETED(x) ntatag_q_in_inv_completed, tag_size_v(x)
+
+NTA_DLL extern tag_typedef_t ntatag_q_in_inv_completed_ref;
+#define NTATAG_Q_IN_INV_COMPLETED_REF(x) ntatag_q_in_inv_completed_ref, tag_size_vr(&(x))
+
+NTA_DLL extern tag_typedef_t ntatag_q_in_inv_confirmed;
+#define NTATAG_Q_IN_INV_CONFIRMED(x) ntatag_q_in_inv_confirmed, tag_size_v(x)
+
+NTA_DLL extern tag_typedef_t ntatag_q_in_inv_confirmed_ref;
+#define NTATAG_Q_IN_INV_CONFIRMED_REF(x) ntatag_q_in_inv_confirmed_ref, tag_size_vr(&(x))
+
+NTA_DLL extern tag_typedef_t ntatag_q_in_preliminary;
+#define NTATAG_Q_IN_PRELIMINARY(x) ntatag_q_in_preliminary, tag_size_v(x)
+
+NTA_DLL extern tag_typedef_t ntatag_q_in_preliminary_ref;
+#define NTATAG_Q_IN_PRELIMINARY_REF(x) ntatag_q_in_preliminary_ref, tag_size_vr(&(x))
+
+NTA_DLL extern tag_typedef_t ntatag_q_in_proceeding;
+#define NTATAG_Q_IN_PROCEEDING(x) ntatag_q_in_proceeding, tag_size_v(x)
+
+NTA_DLL extern tag_typedef_t ntatag_q_in_proceeding_ref;
+#define NTATAG_Q_IN_PROCEEDING_REF(x) ntatag_q_in_proceeding_ref, tag_size_vr(&(x))
+
+NTA_DLL extern tag_typedef_t ntatag_q_in_terminated;
+#define NTATAG_Q_IN_TERMINATED(x) ntatag_q_in_terminated, tag_size_v(x)
+
+NTA_DLL extern tag_typedef_t ntatag_q_in_terminated_ref;
+#define NTATAG_Q_IN_TERMINATED_REF(x) ntatag_q_in_terminated_ref, tag_size_vr(&(x))
+
+NTA_DLL extern tag_typedef_t ntatag_q_out_completed;
+#define NTATAG_Q_OUT_COMPLETED(x) ntatag_q_out_completed, tag_size_v(x)
+
+NTA_DLL extern tag_typedef_t ntatag_q_out_completed_ref;
+#define NTATAG_Q_OUT_COMPLETED_REF(x) ntatag_q_out_completed_ref, tag_size_vr(&(x))
+
+NTA_DLL extern tag_typedef_t ntatag_q_out_delayed;
+#define NTATAG_Q_OUT_DELAYED(x) ntatag_q_out_delayed, tag_size_v(x)
+
+NTA_DLL extern tag_typedef_t ntatag_q_out_delayed_ref;
+#define NTATAG_Q_OUT_DELAYED_REF(x) ntatag_q_out_delayed_ref, tag_size_vr(&(x))
+
+NTA_DLL extern tag_typedef_t ntatag_q_out_inv_calling;
+#define NTATAG_Q_OUT_INV_CALLING(x) ntatag_q_out_inv_calling, tag_size_v(x)
+
+NTA_DLL extern tag_typedef_t ntatag_q_out_inv_calling_ref;
+#define NTATAG_Q_OUT_INV_CALLING_REF(x) ntatag_q_out_inv_calling_ref, tag_size_vr(&(x))
+
+NTA_DLL extern tag_typedef_t ntatag_q_out_inv_completed;
+#define NTATAG_Q_OUT_INV_COMPLETED(x) ntatag_q_out_inv_completed, tag_size_v(x)
+
+NTA_DLL extern tag_typedef_t ntatag_q_out_inv_completed_ref;
+#define NTATAG_Q_OUT_INV_COMPLETED_REF(x) ntatag_q_out_inv_completed_ref, tag_size_vr(&(x))
+
+NTA_DLL extern tag_typedef_t ntatag_q_out_inv_proceeding;
+#define NTATAG_Q_OUT_INV_PROCEEDING(x) ntatag_q_out_inv_proceeding, tag_size_v(x)
+
+NTA_DLL extern tag_typedef_t ntatag_q_out_inv_proceeding_ref;
+#define NTATAG_Q_OUT_INV_PROCEEDING_REF(x) ntatag_q_out_inv_proceeding_ref, tag_size_vr(&(x))
+
+NTA_DLL extern tag_typedef_t ntatag_q_out_resolving;
+#define NTATAG_Q_OUT_RESOLVING(x) ntatag_q_out_resolving, tag_size_v(x)
+
+NTA_DLL extern tag_typedef_t ntatag_q_out_resolving_ref;
+#define NTATAG_Q_OUT_RESOLVING_REF(x) ntatag_q_out_resolving_ref, tag_size_vr(&(x))
+
+NTA_DLL extern tag_typedef_t ntatag_q_out_terminated;
+#define NTATAG_Q_OUT_TERMINATED(x) ntatag_q_out_terminated, tag_size_v(x)
+
+NTA_DLL extern tag_typedef_t ntatag_q_out_terminated_ref;
+#define NTATAG_Q_OUT_TERMINATED_REF(x) ntatag_q_out_terminated_ref, tag_size_vr(&(x))
 
 SOFIA_END_DECLS
 

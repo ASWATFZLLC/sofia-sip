@@ -422,6 +422,26 @@ tag_typedef_t ntatag_maxsize = USIZETAG_TYPEDEF(maxsize);
  */
 tag_typedef_t ntatag_max_proceeding = USIZETAG_TYPEDEF(max_proceeding);
 
+/**@def NTATAG_MAX_RECV_REQUESTS_PER_SECOND(x)
+ *
+ * Maximum receiving requests per second.
+ *
+ * Messages will start dropping when this threshold reaches.
+ *
+ * @par Used with
+ *    nua_create(), nua_set_params(),
+ *    nta_agent_create(), nta_agent_set_params()
+ *
+ * @par Parameter type
+ *    - #usize_t
+ *
+ * @par Values
+ *    - Maximum receiving requests per second (size_t).
+ *
+ * @NEW_1_13_6
+ */
+tag_typedef_t ntatag_max_recv_requests_per_second = USIZETAG_TYPEDEF(max_recv_requests_per_second);
+
 /**@def NTATAG_UDP_MTU(x)
  *
  * Maximum size of outgoing UDP request.
@@ -1397,6 +1417,25 @@ tag_typedef_t ntatag_tcp_rport = BOOLTAG_TYPEDEF(tcp_rport);
  */
 tag_typedef_t ntatag_tls_rport = BOOLTAG_TYPEDEF(tls_rport);
 
+/**@def NTATAG_TLS_ORQ_CONNECT_TIMEOUT(x)
+ *
+ * Connect Timeout for outgoing requests using TLS.
+ *
+ * @par Used with
+ *    nua_create(), nua_set_params(),
+ *    nta_agent_create(), nta_agent_set_params()
+ *
+ * @par Parameter type
+ *    unsigned
+ *
+ * @par Values
+ * - 0 - Disabled
+ * - value - Milliseconds
+ *
+ * @NEW_1_13_2
+ */
+tag_typedef_t ntatag_tls_orq_connect_timeout = UINTTAG_TYPEDEF(tls_orq_connect_timeout);
+
 /**@def NTATAG_PRELOAD(x)
  *
  * Preload by N bytes.
@@ -1935,3 +1974,20 @@ tag_typedef_t ntatag_s_tout_response =    USIZETAG_TYPEDEF(s_tout_response);
 /* Internal */
 tag_typedef_t ntatag_delay_sending = BOOLTAG_TYPEDEF(delay_sending);
 tag_typedef_t ntatag_incomplete = BOOLTAG_TYPEDEF(incomplete);
+
+
+tag_typedef_t ntatag_q_in_completed =    SIZETAG_TYPEDEF(q_in_completed);
+tag_typedef_t ntatag_q_in_final_failed =    SIZETAG_TYPEDEF(q_in_final_failed);
+tag_typedef_t ntatag_q_in_inv_completed =    SIZETAG_TYPEDEF(q_in_inv_completed);
+tag_typedef_t ntatag_q_in_inv_confirmed =    SIZETAG_TYPEDEF(q_in_inv_confirmed);
+tag_typedef_t ntatag_q_in_preliminary =    SIZETAG_TYPEDEF(q_in_preliminary);
+tag_typedef_t ntatag_q_in_proceeding =    SIZETAG_TYPEDEF(q_in_proceeding);
+tag_typedef_t ntatag_q_in_terminated =    SIZETAG_TYPEDEF(q_in_terminated);
+
+tag_typedef_t ntatag_q_out_completed =    SIZETAG_TYPEDEF(q_out_completed);
+tag_typedef_t ntatag_q_out_delayed =    SIZETAG_TYPEDEF(q_out_delayed);
+tag_typedef_t ntatag_q_out_inv_calling =    SIZETAG_TYPEDEF(q_out_inv_calling);
+tag_typedef_t ntatag_q_out_inv_completed =    SIZETAG_TYPEDEF(q_out_inv_completed);
+tag_typedef_t ntatag_q_out_inv_proceeding =    SIZETAG_TYPEDEF(q_out_inv_proceeding);
+tag_typedef_t ntatag_q_out_resolving =    SIZETAG_TYPEDEF(q_out_resolving);
+tag_typedef_t ntatag_q_out_terminated =    SIZETAG_TYPEDEF(q_out_terminated);

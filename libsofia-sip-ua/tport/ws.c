@@ -29,12 +29,14 @@
 
 #define SHA1_HASH_SIZE 20
 static struct ws_globals_s ws_globals;
+ssize_t ws_global_payload_size_max = 0;
 
 #ifndef WSS_STANDALONE
 
 void init_ssl(void)
 {
 	//	SSL_library_init();
+	SSL_load_error_strings();
 }
 void deinit_ssl(void)
 {
@@ -290,6 +292,9 @@ int ws_handshake(wsh_t *wsh)
 	}
 
 	wsh->uri = malloc((e-p) + 1);
+
+	if (!wsh->uri) goto err;
+
 	strncpy(wsh->uri, p, e-p);
 	*(wsh->uri + (e-p)) = '\0';
 
@@ -346,22 +351,26 @@ int ws_handshake(wsh_t *wsh)
 
 }
 
+#define SSL_WANT_READ_WRITE(err) (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE)
+int wss_error(wsh_t *wsh, int ssl_err, char const *who);
+
 ssize_t ws_raw_read(wsh_t *wsh, void *data, size_t bytes, int block)
 {
 	ssize_t r;
-	int err = 0;
+	int ssl_err = 0;
 
 	wsh->x++;
 	if (wsh->x > 250) ms_sleep(1);
 
 	if (wsh->ssl) {
 		do {
+			//ERR_clear_error();
 			r = SSL_read(wsh->ssl, data, bytes);
 
-			if (r == -1) {
-				err = SSL_get_error(wsh->ssl, r);
+			if (r < 0) {
+				ssl_err = SSL_get_error(wsh->ssl, r);
 
-				if (err == SSL_ERROR_WANT_READ) {
+				if (SSL_WANT_READ_WRITE(ssl_err)) {
 					if (!block) {
 						r = -2;
 						goto end;
@@ -369,12 +378,13 @@ ssize_t ws_raw_read(wsh_t *wsh, void *data, size_t bytes, int block)
 					wsh->x++;
 					ms_sleep(10);
 				} else {
+					wss_error(wsh, ssl_err, "ws_raw_read: SSL_read");
 					r = -1;
 					goto end;
 				}
 			}
 
-		} while (r == -1 && err == SSL_ERROR_WANT_READ && wsh->x < 1000);
+		} while (r < 0 && SSL_WANT_READ_WRITE(ssl_err) && wsh->x < 1000);
 
 		goto end;
 	}
@@ -413,6 +423,72 @@ ssize_t ws_raw_read(wsh_t *wsh, void *data, size_t bytes, int block)
 	return r;
 }
 
+/** Log WSS error(s).
+ *
+ * Log the WSS error specified by the error code @a e and all the errors in
+ * the queue. The error code @a e implies no error, and it is not logged.
+ */
+void wss_log_errors(unsigned level, char const *s, unsigned long e)
+{
+	if (e == 0)
+		e = ERR_get_error();
+
+	if (!tport_log->log_init)
+		su_log_init(tport_log);
+
+	if (s == NULL) s = "tls";
+
+	for (; e != 0; e = ERR_get_error()) {
+		if (level <= tport_log->log_level) {
+			const char *error = ERR_lib_error_string(e);
+			const char *func = ERR_func_error_string(e);
+			const char *reason = ERR_reason_error_string(e);
+
+			su_llog(tport_log, level, "%s: %08lx:%s:%s:%s\n",
+				s, e, error, func, reason);
+		}
+	}
+}
+
+int wss_error(wsh_t *wsh, int ssl_err, char const *who)
+{
+	switch (ssl_err) {
+	case SSL_ERROR_ZERO_RETURN:
+		return 0;
+
+	case SSL_ERROR_SYSCALL:
+		ERR_clear_error();
+		if (SSL_get_shutdown(wsh->ssl) & SSL_RECEIVED_SHUTDOWN)
+			return 0;			/* EOS */
+		if (errno == 0)
+			return 0;			/* EOS */
+
+		errno = EIO;
+		return -1;
+
+	default:
+		wss_log_errors(1, who, ssl_err);
+		errno = EIO;
+		return -1;
+	}
+}
+
+/*
+ * Blocking read until bytes have been received, failure, or too many retries.
+ */
+static ssize_t ws_raw_read_blocking(wsh_t *wsh, char *data, size_t max_bytes, int max_retries)
+{
+	ssize_t total_bytes_read = 0;
+	while (total_bytes_read < max_bytes && max_retries-- > 0) {
+		ssize_t bytes_read = ws_raw_read(wsh, data + total_bytes_read, max_bytes - total_bytes_read, WS_BLOCK);
+		if (bytes_read < 0) {
+			break;
+		}
+		total_bytes_read += bytes_read;
+	}
+	return total_bytes_read;
+}
+
 ssize_t ws_raw_write(wsh_t *wsh, void *data, size_t bytes)
 {
 	ssize_t r;
@@ -420,12 +496,21 @@ ssize_t ws_raw_write(wsh_t *wsh, void *data, size_t bytes)
 	int ssl_err = 0;
 	size_t wrote = 0;
 
+	if (wsh == NULL || data == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
+
 	if (wsh->ssl) {
 		do {
-			r = SSL_write(wsh->ssl, (void *)((unsigned char *)data + wrote), bytes - wrote);
+			void *buf = (void *)((unsigned char *)data + wrote);
+			int size = bytes - wrote;
+
+			//ERR_clear_error();
+			r = SSL_write(wsh->ssl, buf, size);
 
 			if (r == 0) {
-				ssl_err = 42;
+				ssl_err = -42;
 				break;
 			}
 			
@@ -437,19 +522,20 @@ ssize_t ws_raw_write(wsh_t *wsh, void *data, size_t bytes)
 				int ms = 1;
 
 				if (wsh->block) {
-					if (sanity < WS_WRITE_SANITY * 3 / 4) {
-						ms = 50;
-					} else if (sanity < WS_WRITE_SANITY / 2) {
+					if (sanity < WS_WRITE_SANITY / 2) {
 						ms = 25;
+					} else if (sanity < WS_WRITE_SANITY * 3 / 4) {
+						ms = 50;
 					}
 				}
 				ms_sleep(ms);
 			}
 
-			if (r == -1) {
+			if (r < 0) {
 				ssl_err = SSL_get_error(wsh->ssl, r);
 
-				if (ssl_err != SSL_ERROR_WANT_WRITE && ssl_err != SSL_ERROR_WANT_READ) {
+				if (!SSL_WANT_READ_WRITE(ssl_err)) {
+					ssl_err = wss_error(wsh, ssl_err, "ws_raw_write: SSL_write");
 					break;
 				}
 				ssl_err = 0;
@@ -457,13 +543,13 @@ ssize_t ws_raw_write(wsh_t *wsh, void *data, size_t bytes)
 
 		} while (--sanity > 0 && wrote < bytes);
 
-		if (!sanity) ssl_err = 56;
+		if (!sanity) ssl_err = -56;
 		
 		if (ssl_err) {
-			r = ssl_err * -1;
+			r = ssl_err;
 		}
 
-		return r;
+		return r < 0 ? r : wrote;
 	}
 
 	do {
@@ -477,10 +563,10 @@ ssize_t ws_raw_write(wsh_t *wsh, void *data, size_t bytes)
 			int ms = 1;
 
 			if (wsh->block) {
-				if (sanity < WS_WRITE_SANITY * 3 / 4) {
-					ms = 50;
-				} else if (sanity < WS_WRITE_SANITY / 2) {
+				if (sanity < WS_WRITE_SANITY / 2) {
 					ms = 25;
+				} else if (sanity < WS_WRITE_SANITY * 3 / 4) {
+					ms = 50;
 				}
 			}
 			ms_sleep(ms);
@@ -581,7 +667,9 @@ int establish_logical_layer(wsh_t *wsh)
 			}
 
 			if (code < 0) {
-				if (code == -1 && SSL_get_error(wsh->ssl, code) != SSL_ERROR_WANT_READ) {
+				int ssl_err = SSL_get_error(wsh->ssl, code);
+				if (!SSL_WANT_READ_WRITE(ssl_err)) {
+					wss_error(wsh, ssl_err, "establish_logical_layer: SSL_accept");
 					return -1;
 				}
 			}
@@ -625,11 +713,16 @@ int establish_logical_layer(wsh_t *wsh)
 	return 0;
 }
 
+void ws_set_global_payload_size_max(ssize_t bytes)
+{
+	ws_global_payload_size_max = bytes;
+}
 
 int ws_init(wsh_t *wsh, ws_socket_t sock, SSL_CTX *ssl_ctx, int close_sock, int block, int stay_open)
 {
 	memset(wsh, 0, sizeof(*wsh));
 
+	wsh->payload_size_max = ws_global_payload_size_max;
 	wsh->sock = sock;
 	wsh->block = block;
 	wsh->sanity = WS_INIT_SANITY;
@@ -691,16 +784,6 @@ void ws_destroy(wsh_t *wsh)
 		wsh->write_buffer_len = 0;
 	}
 
-	if (wsh->ssl) {
-		int code;
-		do {
-			code = SSL_shutdown(wsh->ssl);
-		} while (code == -1 && SSL_get_error(wsh->ssl, code) == SSL_ERROR_WANT_READ);
-
-		SSL_free(wsh->ssl);
-		wsh->ssl = NULL;
-	}
-
 	if (wsh->buffer) free(wsh->buffer);
 	if (wsh->bbuffer) free(wsh->bbuffer);
 
@@ -732,6 +815,30 @@ ssize_t ws_close(wsh_t *wsh, int16_t reason)
 	}
 
 	restore_socket(wsh->sock);
+
+	if (wsh->ssl) {
+		int code = 0;
+		int ssl_error = 0;
+		const char* buf = "0";
+
+		/* check if no fatal error occurs on connection */
+		code = SSL_write(wsh->ssl, buf, 1);
+		ssl_error = SSL_get_error(wsh->ssl, code);
+
+		if (ssl_error == SSL_ERROR_SYSCALL || ssl_error == SSL_ERROR_SSL) {
+			goto ssl_finish_it;
+		}
+
+		code = SSL_shutdown(wsh->ssl);
+		if (code == 0) {
+			/* need to make sure there is no more data to read */
+			ws_raw_read(wsh, wsh->buffer, 9, WS_BLOCK);
+		}
+
+ssl_finish_it:
+		SSL_free(wsh->ssl);
+		wsh->ssl = NULL;
+	}
 
 	if (wsh->close_sock && wsh->sock != ws_sock_invalid) {
 #ifndef WIN32
@@ -838,9 +945,12 @@ ssize_t ws_read_frame(wsh_t *wsh, ws_opcode_t *oc, uint8_t **data)
 				need += 4;
 
 				if (need > wsh->datalen) {
-					/* too small - protocol err */
-					*oc = WSOC_CLOSE;
-					return ws_close(wsh, WS_NONE);
+					ssize_t bytes = ws_raw_read_blocking(wsh, wsh->buffer + wsh->datalen, need - wsh->datalen, 10);
+					if (bytes < 0 || (wsh->datalen += bytes) < need) {
+						/* too small - protocol err */
+						*oc = WSOC_CLOSE;
+						return ws_close(wsh, WS_NONE);
+					}
 				}
 			}
 
@@ -849,25 +959,16 @@ ssize_t ws_read_frame(wsh_t *wsh, ws_opcode_t *oc, uint8_t **data)
 
 			if (wsh->plen == 127) {
 				uint64_t *u64;
-				int more = 0;
 
 				need += 8;
 
 				if (need > wsh->datalen) {
-					/* too small - protocol err */
-					//*oc = WSOC_CLOSE;
-					//return ws_close(wsh, WS_PROTO_ERR);
-
-					more = ws_raw_read(wsh, wsh->buffer + wsh->datalen, need - wsh->datalen, WS_BLOCK);
-
-					if (more < 0 || more < need - wsh->datalen) {
+					ssize_t bytes = ws_raw_read_blocking(wsh, wsh->buffer + wsh->datalen, need - wsh->datalen, 10);
+					if (bytes < 0 || (wsh->datalen += bytes) < need) {
+						/* too small - protocol err */
 						*oc = WSOC_CLOSE;
 						return ws_close(wsh, WS_NONE);
-					} else {
-						wsh->datalen += more;
 					}
-
-
 				}
 
 				u64 = (uint64_t *) wsh->payload;
@@ -879,9 +980,12 @@ ssize_t ws_read_frame(wsh_t *wsh, ws_opcode_t *oc, uint8_t **data)
 				need += 2;
 
 				if (need > wsh->datalen) {
-					/* too small - protocol err */
-					*oc = WSOC_CLOSE;
-					return ws_close(wsh, WS_NONE);
+					ssize_t bytes = ws_raw_read_blocking(wsh, wsh->buffer + wsh->datalen, need - wsh->datalen, 10);
+					if (bytes < 0 || (wsh->datalen += bytes) < need) {
+						/* too small - protocol err */
+						*oc = WSOC_CLOSE;
+						return ws_close(wsh, WS_NONE);
+					}
 				}
 
 				u16 = (uint16_t *) wsh->payload;
@@ -908,6 +1012,12 @@ ssize_t ws_read_frame(wsh_t *wsh, ws_opcode_t *oc, uint8_t **data)
 				void *tmp;
 
 				wsh->bbuflen = need + blen + wsh->rplen;
+
+				if (wsh->payload_size_max && wsh->bbuflen > wsh->payload_size_max) {
+					/* size limit */
+					*oc = WSOC_CLOSE;
+					return ws_close(wsh, WS_NONE);
+				}
 
 				if ((tmp = realloc(wsh->bbuffer, wsh->bbuflen))) {
 					wsh->bbuffer = tmp;
@@ -986,6 +1096,7 @@ ssize_t ws_write_frame(wsh_t *wsh, ws_opcode_t oc, void *data, size_t bytes)
 	ssize_t raw_ret = 0;
 
 	if (wsh->down) {
+		errno = EIO;
 		return -1;
 	}
 
@@ -1031,7 +1142,7 @@ ssize_t ws_write_frame(wsh_t *wsh, ws_opcode_t oc, void *data, size_t bytes)
 
 	raw_ret = ws_raw_write(wsh, bp, (hlen + bytes));
 
-	if (raw_ret != (ssize_t) (hlen + bytes)) {
+	if (raw_ret <= 0 || raw_ret != (ssize_t) (hlen + bytes)) {
 		return raw_ret;
 	}
 
